@@ -46,6 +46,9 @@ aEntero (Left a) = a
 limpiar :: String -> String -> String
 limpiar a = filter (\x -> not (elem x a))
 
+limpiar2 :: String -> String -> String
+limpiar2 a = filter (not . flip elem a)
+
 -- b.
 flength :: [a] -> Float
 flength [] = 0
@@ -58,6 +61,6 @@ difPromedio :: [Float] -> [Float]
 difPromedio a = map (\x -> x - prom a) a
 
 -- c.
-todosIguales :: [Int] -> Bool
-todosIguales [] = True
-todosIguales (x:xs) = esIgual x xs
+-- todosIguales :: [Int] -> Bool
+-- todosIguales [] = True
+-- todosIguales (x:xs) = esIgual x xs
