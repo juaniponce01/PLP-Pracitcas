@@ -283,12 +283,193 @@ data Polinomio a = X
     | Prod (Polinomio a) (Polinomio a)
 
 -- Esquema estructural
-foldPol :: Num a => (a -> a) -> a -> Polinomio a -> a
-foldPol p z (Cte a) = z
-foldPol p z (Suma a b) = p ((foldPol p z a) + (foldPol p z b))
-foldPol p z (Prod a b) = p ((foldPol p z a) * (foldPol p z b))
+foldPol :: (a -> b) -> (a -> b) -> (b -> b -> b) -> (b -> b -> b) -> a -> Polinomio a -> b
+foldPol f cte suma prod x pol = case pol of
+    (X) -> f x
+    (Cte c) -> cte c
+    (Suma a b) -> suma (recPol a) (recPol b)
+        where recPol = foldPol f cte suma prod x
+    (Prod a b) -> prod (recPol a) (recPol b)
+        where recPol = foldPol f cte suma prod x
 
 evaluar :: Num a => a -> Polinomio a -> a
-evaluar x = foldPol id 0
+evaluar = foldPol id id (+) (*)
 
 
+-- Ejercicio 13
+data AB a = Nil | Bin (AB a) a (AB a)
+
+instance (Show a) => Show (AB a) where
+  show Nil = "Nil"
+  show (Bin i r d) = "(" ++ (show i) ++ " " ++ (show r) ++ " " ++ (show d) ++ ")"
+
+-- I
+foldAB :: b -> (b -> a -> b -> b) -> AB a -> b
+foldAB cNil cBin Nil = cNil 
+foldAB cNil cBin (Bin i r d) = 
+    cBin (foldAB cNil cBin i) r (foldAB cNil cBin d)
+
+recAB :: b -> (AB a -> a -> AB a -> b -> b -> b) -> AB a -> b
+recAB cNil cBin Nil = cNil
+recAB cNil cBin (Bin i r d) = 
+    cBin i r d (recAB cNil cBin i) (recAB cNil cBin d)
+
+-- II
+esNil :: AB a -> Bool
+esNil arbol = case arbol of
+    (Nil) -> True
+    (Bin i r d) -> False
+
+esNil2 :: AB a -> Bool
+esNil2 = foldAB True (\ri r rd -> False)
+
+altura :: AB a -> Int
+altura = foldAB 0 (\ri _ rd -> 1 + max ri rd)
+
+cantNodos :: AB a -> Int
+cantNodos = foldAB 0 (\ri _ rd -> ri + 1 + rd) 
+
+-- III
+foldAB1 :: (a -> a -> a -> a) -> AB a -> a
+foldAB1 fBin (Bin Nil r Nil) = r
+foldAB1 fBin (Bin Nil r d) = fBin r r (foldAB1 fBin d)
+foldAB1 fBin (Bin i r Nil) = fBin (foldAB1 fBin i) r r
+foldAB1 fBin (Bin i r d) = fBin (foldAB1 fBin i) r (foldAB1 fBin d)
+
+elMejorDado :: (a -> a -> Bool) -> a -> a -> a
+elMejorDado p x y = if p x y then x else y
+
+mejorSegunAB :: (a -> a -> Bool) -> AB a -> a
+mejorSegunAB p = foldAB1 (\ri r rd -> 
+                            if p ri rd 
+                            then elMejorDado p r ri
+                            else elMejorDado p r rd
+    )
+
+-- IV
+esMayorA :: Ord a => a -> AB a -> Bool
+esMayorA x = foldAB True (\ri r rd -> r > x && ri && rd)
+
+esMenorOIgualA :: Ord a => a -> AB a -> Bool
+esMenorOIgualA x = foldAB True (\ri r rd -> r <= x && ri && rd)
+
+-- esABB :: Ord a => AB a -> Bool
+-- esABB Nil = True
+-- esABB (Bin Nil r Nil) = True
+-- esABB (Bin Nil r d) = esABB d && esMayorA r d
+-- esABB (Bin i r Nil) = esABB i && esMenorOIgualA r i
+-- esABB (Bin i r d) = esABB i && esABB d && esMayorA r d && esMenorOIgualA r i
+
+esABB :: Ord a => AB a -> Bool
+esABB = recAB True (\i r d ri rd -> ri && rd && esMayorA r d && esMenorOIgualA r i)
+
+-- V
+-- Para el II se usó foldAB por la sencillez de su esquema estructural
+-- Para el III se usó foldAB1 tomando la misma idea de foldr1 para mejorSegun
+-- Para el IV se usó recAB ya que era necesario operar con la estructura de los subarboles 
+
+
+-- Ejercicio 14
+
+-- I
+sonListasIguales :: Eq a => [a] -> [a] -> Bool
+sonListasIguales [] [] = True
+sonListasIguales (x:xs) (y:ys) = x == y && sonListasIguales xs ys
+
+consecutivos :: Eq a => [[a]] -> [[a]]
+consecutivos [] = []
+consecutivos [x] = []
+consecutivos (x:xs) = if sonListasIguales x (head xs)
+                        then x : consecutivos (tail xs) 
+                        else consecutivos xs
+
+ramas :: Eq a => AB a -> [[a]]
+ramas = consecutivos . (foldAB [[]] (\ri r rd -> (map (r:) ri) ++ (map (r:) rd)))
+
+-- ramas2 :: AB a -> [AB a]
+-- ramas2 = recAB [Nil] (\i r d ri rd -> 
+--             if esHoja (Bin i r d) 
+--             then map (Bin ri r Nil) ri -- ???
+--         )
+
+
+esHoja :: AB a -> Bool
+esHoja Nil = False
+esHoja (Bin Nil r Nil) = True
+esHoja (Bin i r d) = False
+
+sumarHoja :: AB a -> Int
+sumarHoja arbol = if esHoja arbol then 1 else 0
+
+cantHojas :: AB a -> Int
+cantHojas = recAB 0 (\d r i ri rd -> sumarHoja (Bin i r d) + rd + ri)
+
+espejo :: AB a -> AB a
+espejo = foldAB Nil (\ri r rd -> Bin rd r ri)
+
+-- II
+mismaEstructura :: AB a -> AB a -> Bool
+mismaEstructura = foldAB (\ab -> esNil ab) 
+            (\ri r rd (Bin i _ d) -> rd d && ri i)
+
+-- igualLongitud :: [a] -> [a] -> Bool
+-- igualLongitud x y = length x == length y
+-- mismaEstructura :: Eq a => AB a -> AB a -> Bool
+-- mismaEstructura ab ab2 = igualLongitud (ramas ab) (ramas ab2) && all (True==) (mapDoble igualLongitud (ramas ab) (ramas ab2))
+
+
+-- Ejercicio 15
+data AIH a = Hoja a | Arbol (AIH a) (AIH a)
+
+-- a.
+foldAIH :: (a -> b) -> (b -> b -> b) -> AIH a -> b
+foldAIH fHoja fArbol (Hoja a) = fHoja a
+foldAIH fHoja fArbol (Arbol i d) = 
+    fArbol (foldAIH fHoja fArbol i) (foldAIH fHoja fArbol d)
+
+-- b.
+alturaAIH :: AIH a -> Integer
+alturaAIH = foldAIH (const 1) (\ri rd -> 1 + max ri rd)
+
+tamañoAIH :: AIH a -> Integer
+tamañoAIH = foldAIH (const 1) (+)
+
+-- c.
+-- arbolesTipoUnit :: [AIH ()]
+-- arbolesTipoUnit = Hoja () : [Arbol (last arbolesTipoUnit) (last arbolesTipoUnit)]
+
+-- d. ??
+
+
+-- Ejercicio 16
+
+-- I
+data RoseTree a = Rose a [RoseTree a]
+
+-- II
+foldRT :: (a -> b) -> (a -> [b] -> b) -> RoseTree a -> b
+foldRT fRose fTree (Rose n []) = fRose n
+foldRT fRose fTree (Rose n l) = fTree n (map (foldRT fRose fTree) l)
+
+-- foldRT :: (a -> [b] -> b) -> RoseTree a -> b
+-- foldRT fTree (Rose n l) = fTree n (map (foldRT fTree) l)
+
+-- III
+-- a.
+hojas :: RoseTree a -> [a]
+hojas = foldRT (:[]) (\n l -> n : concat l)
+
+-- hojasRT = foldRT (\n l -> if null l
+--                             then [n]
+--                             else n : (concat l))
+
+-- b.
+distancias :: RoseTree a -> [Int]
+distancias = foldRT (const [0]) (\n l -> 0 : map (+1) (concat l))
+
+-- c.
+alturaRT :: RoseTree a -> Int
+alturaRT = (+1) . (mejorSegun (>)) . distancias
+
+alturaRT2 :: RoseTree a -> Int
+alturaRT2 = foldRT (const 1) (\n l -> 1 + mejorSegun (>) l)
